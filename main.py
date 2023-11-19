@@ -5,13 +5,14 @@ import simpy
 import numpy as np
 from enum import Enum
 from Hospital import Hospital
+import util
 
 # 
 #   VARIABLES AND PARAMETERS FOR THE SIMULATION MODEL
 # 
 
 PATIENTSTATE = Enum("PATIENTSTATE", ['ARRIVED', 'IN_PREPARATION', 'PREPARED', 'IN_OPERATION', 'OPERATED', 'IN_RECOVERY', 'RECOVERED'])
-DISTRIBUTION = Enum("DISTRIBUTION", ['NORMAL', 'EXPONENTIAL'])
+STARTING_PATIENTS = 1       # Number of patients already in the waiting room
 
 NUM_P_ROOMS = 3             # Number of Preparation Rooms
 NUM_O_THEATERS = 1          # Number of Operating Theaters
@@ -20,10 +21,10 @@ NUM_R_ROOMS = 3             # Number of Recovery Rooms
 AVG_PREPARATION_TIME = 40   # Average Preparation time (patient in Preparation Room)
 AVG_OPERATION_TIME = 20     # Average Operation time (patient in Operation Theater)
 AVG_RECOVERY_TIME = 40      # Average Recovery time (patient in Recovery Room)
-PATIENT_INTERVAL = 25       # Average time it takes for a new patient to arrive
-ROUNDING_PRECISION = 3     # How many decimal numbers when rounding
+PATIENT_INTERVAL = 20       # Average time it takes for a new patient to arrive
+ROUNDING_PRECISION = 3      # How many decimal numbers when rounding
 
-SIM_TIME = 1200             # The time for the simulation to run
+SIM_TIME = 12000            # The time for the simulation to run
 
 #
 #   VARIABLES FOR THE MONITORING OF THE MODEL
@@ -37,78 +38,6 @@ patients_handled = 0        # Patients handled in the SIM_TIM
 #
 #   UTIL METHODS
 #
-
-# Print timeline of all the events
-def print_timeline():
-    print("Timeline:")
-    for event in timeline:
-        print(event)
-    print()
-
-# Print the resulting time stamp when activating an event of each patient
-def print_patient_results():
-    for name in patients_data:
-        print(f"Patient {name}: ")
-        for category in patients_data[name]:
-            for var in patients_data[name][category]:
-                print(f"\t{var.ljust(20)}: {patients_data[name][category][var]}")
-            print()
-    
-    print(f"\nPatients handled: {patients_handled}\n")
-
-# Print all the most important results of the simulation
-def print_important_results():
-    print(f"\nPatients handled: {patients_handled}\n")
-
-    print("The final distribution of patients in the simulation are: ")
-    for room in saved_data[SIM_TIME]["patient_distribution"]:
-            print(f"\tNumber of people in {room.ljust(23)}: {saved_data[SIM_TIME]['patient_distribution'][room]}")
-    print()
-
-    print("The averages of the simulation are: ")
-    print(f"\tWaiting to be prepared:       {saved_data[SIM_TIME]['waiting_times']['averages']['arrived_preparation']}")
-    print(f"\tWaiting to be operated:       {saved_data[SIM_TIME]['waiting_times']['averages']['preparation_operation']}")
-    print(f"\tWaiting to get to recovery:   {saved_data[SIM_TIME]['waiting_times']['averages']['operation_recovery']}")
-    print()
-
-# Print the distribution of people in the hospital per timestamp
-def print_patient_distribution():
-    print("Time stamp data: \n")
-    for time in saved_data:
-        print(f"Time stamp {time}:")
-        print("Distribution of patients at this time:")
-        for room in saved_data[time]["patient_distribution"]:
-            print(f"\tNumber of people in {room.ljust(23)}: {saved_data[time]['patient_distribution'][room]}")
-        print()
-
-# Print for each patient the waiting time between rooms (events)
-def print_all_waiting_times():
-    print("Waiting time per patient")
-    for name in saved_data[SIM_TIME]["waiting_times"]:
-        print(f"\tWaiting time patient {name}:")
-        print(f"\t\tWaiting time to be prepared:       {saved_data[SIM_TIME]['waiting_times'][name]['arrived_preparation']}")
-        print(f"\t\tWaiting time to be operated:       {saved_data[SIM_TIME]['waiting_times'][name]['preparation_operation']}")
-        print(f"\t\tWaiting time to get to recovery:   {saved_data[SIM_TIME]['waiting_times'][name]['operation_recovery']}\n")
-    print()
-
-# Print all results saved
-def print_all_results():
-    print_timeline()                # Print timeline of events
-
-    print_patient_results()            # Print all time stamp of each event per patient
-
-    print_patient_distribution()    # Print distribution of people in the hospital per timestamp
-
-    print_all_waiting_times()       # Print all the patients waiting times
-
-    print_important_results()       # Print all the important results (averages, etc.)
-
-# Get a random time according to a distribution
-def get_random_time(distribution, avg_time):
-    if(distribution == DISTRIBUTION.NORMAL):
-        ...
-    elif(distribution == DISTRIBUTION.EXPONENTIAL):
-        return np.random.exponential(avg_time)
     
 # Monitors and saves data 
 def save_timed_data(save_time):
@@ -164,6 +93,41 @@ def save_final_data():
     wait_times_preparation_operation = []
     wait_times_operation_recovery = []
 
+    all_num_patients_in_waiting_preparation = []
+    max_patients_waiting_preparation = 0
+    avg_patients_waiting_preparation = 0
+
+    all_num_patients_in_waiting_operation = []
+    max_patients_waiting_operation = 0
+    avg_patients_waiting_operation = 0
+
+    all_num_patients_in_waiting_recovery = []
+    max_patients_wating_recovery = 0
+    avg_patients_waiting_recovery = 0
+
+    for time in saved_data:
+        all_num_patients_in_waiting_preparation.append(saved_data[time]["patient_distribution"]["waiting_room"])
+        all_num_patients_in_waiting_operation.append(saved_data[time]["patient_distribution"]["waiting_for_operation"])
+        all_num_patients_in_waiting_recovery.append(saved_data[time]["patient_distribution"]["waiting_for_recovery"])
+    
+    max_patients_waiting_preparation = max(all_num_patients_in_waiting_preparation)
+    avg_patients_waiting_preparation = util.get_avg(all_num_patients_in_waiting_preparation)
+
+    max_patients_waiting_operation = max(all_num_patients_in_waiting_operation)
+    avg_patients_waiting_operation = util.get_avg(all_num_patients_in_waiting_operation)
+
+    max_patients_wating_recovery = max(all_num_patients_in_waiting_recovery)
+    avg_patients_waiting_recovery = util.get_avg(all_num_patients_in_waiting_recovery)
+
+    saved_data[SIM_TIME]["patient_distribution"]["averages"] = {
+        "max_patients_waiting_preparation": max_patients_waiting_preparation,
+        "avg_patients_waiting_preparation": avg_patients_waiting_preparation,
+        "max_patients_waiting_operation": max_patients_waiting_operation,
+        "avg_patients_waiting_operation": avg_patients_waiting_operation,
+        "max_patients_waiting_recovery": max_patients_wating_recovery,
+        "avg_patients_waiting_recovery": avg_patients_waiting_recovery
+    }
+
     for name in patients_data:
         # Check the waiting times between rooms
         time_stamps = patients_data[name]["time_stamps"]
@@ -196,29 +160,14 @@ def save_final_data():
             "operation_recovery": operation_recovery
         }
 
-    total_time = 0
-    total_above_null = 0
-
     # Calculate average wait time between arriving and preparation
-    for time in wait_times_arrived_preparation:
-        if(time > 0):
-            total_time += time
-            total_above_null += 1
-    avg_arrived_preparation = round(total_time/total_above_null, ROUNDING_PRECISION)
+    avg_arrived_preparation = round(util.get_avg(wait_times_arrived_preparation), ROUNDING_PRECISION)
 
     # Calculate average wait time between being prepared and operation
-    for time in wait_times_preparation_operation:
-        if(time > 0):
-            total_time += time
-            total_above_null += 1
-    avg_preparation_operation = round(total_time/total_above_null, ROUNDING_PRECISION)
+    avg_preparation_operation = round(util.get_avg(wait_times_preparation_operation), ROUNDING_PRECISION)
 
     # Calculate average wait time between being operated and recovery
-    for time in wait_times_operation_recovery:
-        if(time > 0):
-            total_time += time
-            total_above_null += 1
-    avg_operation_recovery = round(total_time/total_above_null, ROUNDING_PRECISION)
+    avg_operation_recovery = round(util.get_avg(wait_times_operation_recovery), ROUNDING_PRECISION)
 
     saved_data[SIM_TIME]["waiting_times"] = waiting_times
     saved_data[SIM_TIME]["waiting_times"]["averages"] = {
@@ -238,9 +187,9 @@ def patient(env, name, distribution, hospital):
     # Initializing Patient
     in_hospital = True
     state = PATIENTSTATE.ARRIVED
-    preparation_time = get_random_time(distribution, AVG_PREPARATION_TIME)
-    operation_time = get_random_time(distribution, AVG_OPERATION_TIME)
-    recovery_time = get_random_time(distribution, AVG_RECOVERY_TIME)
+    preparation_time = util.get_random_time(distribution, AVG_PREPARATION_TIME)
+    operation_time = util.get_random_time(distribution, AVG_OPERATION_TIME)
+    recovery_time = util.get_random_time(distribution, AVG_RECOVERY_TIME)
     patients_data[name] = { 
     "current_data": {
         "state": state,
@@ -332,13 +281,13 @@ def patient(env, name, distribution, hospital):
 def setup(env):
     hospital = Hospital(env, NUM_P_ROOMS, NUM_O_THEATERS, NUM_R_ROOMS, AVG_PREPARATION_TIME, AVG_OPERATION_TIME, AVG_RECOVERY_TIME)
 
-    for i in range(1, 6):
-        env.process(patient(env, i, DISTRIBUTION.EXPONENTIAL, hospital))
+    for i in range(1, STARTING_PATIENTS+1):
+        env.process(patient(env, i, util.DISTRIBUTION.EXPONENTIAL, hospital))
 
     while True:
         yield env.timeout(np.random.exponential(PATIENT_INTERVAL))
         i += 1
-        env.process(patient(env, i, DISTRIBUTION.EXPONENTIAL, hospital))
+        env.process(patient(env, i, util.DISTRIBUTION.EXPONENTIAL, hospital))
 
 print("Starting Hospital Simulation... \n")
 env = simpy.Environment()
@@ -347,10 +296,10 @@ env.run(until=SIM_TIME)
 
 save_final_data()
 
-#print_timeline()
-#print_patient_results()
-#print_patient_distribution()
-#print_all_waiting_times()
-#print_important_results()
-print_all_results()
+#util.print_timeline(timeline)
+#util.print_patient_results(patients_data)
+#util.print_patient_distribution(saved_data)
+#util.print_all_waiting_times(saved_data, SIM_TIME)
+#util.print_important_results(saved_data, SIM_TIME, patients_handled)
+util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
 
