@@ -13,16 +13,13 @@ class Hospital:
         self.recovery_time = recovery_time
 
     # Function for the Preparation Room
-    def preparing(self, patient, preparation_time):
-        random_time = max(1, np.random.exponential(preparation_time))
-        yield self.env.timeout(random_time)
+    def preparing(self, preparation_time):
+        yield self.env.timeout(preparation_time)
 
     # Function for the Operating Room
-    def operating(self, patient, operation_time):
-        random_time = max(1, np.random.exponential(operation_time))
-        yield self.env.timeout(random_time)
+    def operating(self, operation_time):
+        yield self.env.timeout(operation_time)
 
     # Function for the Recovery Room
-    def recovering(self, patient, recovery_time):
-        random_time = max(1, np.random.exponential(recovery_time))
-        yield self.env.timeout(random_time)
+    def recovering(self, recovery_time):
+        yield self.env.timeout(recovery_time)

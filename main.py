@@ -31,8 +31,9 @@ SIM_TIME = 12000            # The time for the simulation to run
 #
 
 patients_data = {}          # Data of each patient
-saved_data = {}             # Data of some time_stampss
+saved_data = {}             # Data of some time_stamps
 timeline = []               # Timeline of all the events happening in the simulation
+time_in_operating_theater = 0
 patients_handled = 0        # Patients handled in the SIM_TIM
 
 #
@@ -88,11 +89,8 @@ def save_timed_data(save_time):
 def save_final_data():
     save_timed_data(SIM_TIME)
 
-    waiting_times = {}
-    wait_times_arrived_preparation = []
-    wait_times_preparation_operation = []
-    wait_times_operation_recovery = []
-
+    # Save final patient distribution
+    # Variables for the saving
     all_num_patients_in_waiting_preparation = []
     max_patients_waiting_preparation = 0
     avg_patients_waiting_preparation = 0
@@ -119,6 +117,7 @@ def save_final_data():
     max_patients_wating_recovery = max(all_num_patients_in_waiting_recovery)
     avg_patients_waiting_recovery = util.get_avg(all_num_patients_in_waiting_recovery)
 
+    # Save the final distribution in the dictionary
     saved_data[SIM_TIME]["patient_distribution"]["averages"] = {
         "max_patients_waiting_preparation": max_patients_waiting_preparation,
         "avg_patients_waiting_preparation": avg_patients_waiting_preparation,
@@ -128,7 +127,25 @@ def save_final_data():
         "avg_patients_waiting_recovery": avg_patients_waiting_recovery
     }
 
+    # Save the waiting times 
+    # Variables for the saving
+    waiting_times = {}
+    wait_times_arrived_preparation = []
+    wait_times_preparation_operation = []
+    wait_times_operation_recovery = []
+
+    # Variables for the process times saving
+    all_preparation_times = []
+    all_operation_times = []
+    all_recovery_times = []
+
+    # Go through each patient and calculate their waiting times and get their operating times
     for name in patients_data:
+        # Saving the process times
+        all_preparation_times.append(patients_data[name]["process_time"]["preparation_time"])
+        all_operation_times.append(patients_data[name]["process_time"]["operation_time"])
+        all_recovery_times.append(patients_data[name]["process_time"]["recovery_time"])        
+
         # Check the waiting times between rooms
         time_stamps = patients_data[name]["time_stamps"]
         # Make the calculations
@@ -160,6 +177,30 @@ def save_final_data():
             "operation_recovery": operation_recovery
         }
 
+    # Saves the min, max and average of the process times
+    process_times = {
+        "preparation_time": {
+            "min": min(all_preparation_times),
+            "max": max(all_preparation_times),
+            "avg": util.get_avg(all_preparation_times)
+        },
+        "operation_time": {
+            "min": min(all_operation_times),
+            "max": max(all_operation_times),
+            "avg": util.get_avg(all_operation_times)
+        },
+        "recovery_time": {
+            "min": min(all_recovery_times),
+            "max": max(all_recovery_times),
+            "avg": util.get_avg(all_recovery_times)
+        }
+    }
+
+    saved_data[SIM_TIME]["process_times"] = process_times
+
+    # Saves the Utilizations of the rooms (in %)
+    saved_data[SIM_TIME]["utilization"] = {"operating_theater": (time_in_operating_theater/SIM_TIME) * 100}
+
     # Calculate average wait time between arriving and preparation
     avg_arrived_preparation = round(util.get_avg(wait_times_arrived_preparation), ROUNDING_PRECISION)
 
@@ -182,6 +223,7 @@ def save_final_data():
 
 def patient(env, name, distribution, hospital):
     global patients_handled
+    global time_in_operating_theater
     timeline.append(f"{env.now:.2f} - A new patient, {name}, enters the waiting room.")
 
     # Initializing Patient
@@ -194,7 +236,7 @@ def patient(env, name, distribution, hospital):
     "current_data": {
         "state": state,
     },
-    "random_times": {
+    "process_time": {
         "preparation_time": round(preparation_time, ROUNDING_PRECISION),
         "operation_time": round(operation_time, ROUNDING_PRECISION),
         "recovery_time": round(recovery_time, ROUNDING_PRECISION)
@@ -225,7 +267,7 @@ def patient(env, name, distribution, hospital):
                 patients_data[name]["time_stamps"]["starting_preparation"] = round(env.now, ROUNDING_PRECISION)
 
                 # Wait for the preparing process
-                yield env.process(hospital.preparing(name, preparation_time))
+                yield env.process(hospital.preparing(preparation_time))
                 timeline.append(f"{env.now:.2f} - Patient {name} has been prepared.")
                 patients_data[name]["time_stamps"]["prepared"] = round(env.now, ROUNDING_PRECISION)
 
@@ -237,6 +279,7 @@ def patient(env, name, distribution, hospital):
             with hospital.operation_theaters.request() as request:
                 # Wait for a free Operation Theater
                 yield request
+
                 state = PATIENTSTATE.IN_OPERATION
                 patients_data[name]["current_data"]["state"] = state
 
@@ -244,7 +287,8 @@ def patient(env, name, distribution, hospital):
                 patients_data[name]["time_stamps"]["starting_operation"] = round(env.now, ROUNDING_PRECISION)
 
                 # Wait for the operating process
-                yield env.process(hospital.operating(name, operation_time))
+                yield env.process(hospital.operating(operation_time))
+                time_in_operating_theater += operation_time
                 timeline.append(f"{env.now:.2f} - Patient {name} has been operated.")
                 patients_data[name]["time_stamps"]["operated"] = round(env.now, ROUNDING_PRECISION)
 
@@ -263,7 +307,7 @@ def patient(env, name, distribution, hospital):
                 patients_data[name]["time_stamps"]["starting_recovery"] = round(env.now, ROUNDING_PRECISION)
 
                 # Wait for the recovery process
-                yield env.process(hospital.recovering(name, recovery_time))
+                yield env.process(hospital.recovering(recovery_time))
                 timeline.append(f"{env.now:.2f} - Patient {name} has been recovered.")
                 patients_data[name]["time_stamps"]["recovered"] = round(env.now, ROUNDING_PRECISION)
 
@@ -300,6 +344,6 @@ save_final_data()
 #util.print_patient_results(patients_data)
 #util.print_patient_distribution(saved_data)
 #util.print_all_waiting_times(saved_data, SIM_TIME)
-#util.print_important_results(saved_data, SIM_TIME, patients_handled)
-util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
+util.print_important_results(saved_data, SIM_TIME, patients_handled)
+#util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
 

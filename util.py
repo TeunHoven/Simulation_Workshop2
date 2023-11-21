@@ -62,6 +62,23 @@ def print_important_results(saved_data, SIM_TIME, patients_handled):
     print(f"\t\tAverage:                        {saved_data[SIM_TIME]['patient_distribution']['averages']['avg_patients_waiting_recovery']}")
     print()
 
+    print("The process time per room of the patients are: ")
+    for room in saved_data[SIM_TIME]["process_times"]:
+            if(room == "preparation_time"):
+                print("\tPreparation times:")
+            elif(room == "operation_time"):
+                print("\tOperation times:")
+            elif(room == "recovery_time"):
+                print("\tRecovery times:")
+            else:
+                print("Room not available!")
+            for type in saved_data[SIM_TIME]["process_times"][room]:
+                print(f"\t\t{type}: {saved_data[SIM_TIME]['process_times'][room][type]}")
+    print()
+
+    print("The utilization of the rooms are:")
+    print(f"\tOperating Theater:                {saved_data[SIM_TIME]['utilization']['operating_theater']:.2f}%")
+
 # Print the distribution of people in the hospital per timestamp
 def print_patient_distribution(saved_data):
     print("Time stamp data: \n")
