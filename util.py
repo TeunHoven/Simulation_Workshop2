@@ -44,6 +44,11 @@ def print_important_results(saved_data, SIM_TIME, patients_handled):
                 print(f"\tNumber of people in {room.ljust(23)}: {saved_data[SIM_TIME]['patient_distribution'][room]}")
     print()
 
+    print("The final distribution of injuries in the simulation are: ")
+    for severity in saved_data[SIM_TIME]["injuries_distribution"]:
+            print(f"\tNumber of people in {severity.ljust(23)}: {saved_data[SIM_TIME]['injuries_distribution'][severity]}")
+    print()
+
     print("The average waiting times of the simulation are: ")
     print(f"\tWaiting to be prepared:       {saved_data[SIM_TIME]['waiting_times']['averages']['arrived_preparation']}")
     print(f"\tWaiting to be operated:       {saved_data[SIM_TIME]['waiting_times']['averages']['preparation_operation']}")
@@ -87,6 +92,11 @@ def print_patient_distribution(saved_data):
         print("Distribution of patients at this time:")
         for room in saved_data[time]["patient_distribution"]:
             print(f"\tNumber of people in {room.ljust(23)}: {saved_data[time]['patient_distribution'][room]}")
+        print()
+
+        print("The final distribution of injuries in the simulation are: ")
+        for severity in saved_data[time]["injuries_distribution"]:
+                print(f"\tNumber of people in {severity.ljust(23)}: {saved_data[time]['injuries_distribution'][severity]}")
         print()
 
 # Print for each patient the waiting time between rooms (events)

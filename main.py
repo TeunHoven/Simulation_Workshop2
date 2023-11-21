@@ -12,19 +12,23 @@ import util
 # 
 
 PATIENTSTATE = Enum("PATIENTSTATE", ['ARRIVED', 'IN_PREPARATION', 'PREPARED', 'IN_OPERATION', 'OPERATED', 'IN_RECOVERY', 'RECOVERED'])
-STARTING_PATIENTS = 1       # Number of patients already in the waiting room
+STARTING_PATIENTS = 3       # Number of patients already in the waiting room
 
-NUM_P_ROOMS = 3             # Number of Preparation Rooms
+NUM_P_ROOMS = 5           # Number of Preparation Rooms
 NUM_O_THEATERS = 1          # Number of Operating Theaters
-NUM_R_ROOMS = 3             # Number of Recovery Rooms
+NUM_R_ROOMS = 5            # Number of Recovery Rooms
+
+NUM_NURSES = 2
 
 AVG_PREPARATION_TIME = 40   # Average Preparation time (patient in Preparation Room)
 AVG_OPERATION_TIME = 20     # Average Operation time (patient in Operation Theater)
 AVG_RECOVERY_TIME = 40      # Average Recovery time (patient in Recovery Room)
-PATIENT_INTERVAL = 20       # Average time it takes for a new patient to arrive
+PATIENT_INTERVAL = 25       # Average time it takes for a new patient to arrive
 ROUNDING_PRECISION = 3      # How many decimal numbers when rounding
 
-SIM_TIME = 12000            # The time for the simulation to run
+SEVERITY_NUMBER = 0.5       # Random number 
+
+SIM_TIME = 1200            # The time for the simulation to run
 
 #
 #   VARIABLES FOR THE MONITORING OF THE MODEL
@@ -51,9 +55,14 @@ def save_timed_data(save_time):
     num_recovered = 0
     total = 0
 
+    num_light_injuries = 0
+    num_medium_injuries = 0
+    num_severe_injuries = 0
+
     for name in patients_data:
         # Check how many patients are in which state (length of queues and utilization of rooms)
         state = patients_data[name]["current_data"]["state"]
+        severity = patients_data[name]["current_data"]["severity"]
         if(state == PATIENTSTATE.ARRIVED):
             num_waiting_room += 1
         elif(state == PATIENTSTATE.IN_PREPARATION):
@@ -69,6 +78,14 @@ def save_timed_data(save_time):
         elif(state == PATIENTSTATE.RECOVERED):
             num_recovered += 1
 
+        if(severity >= -1):
+            num_light_injuries += 1
+        elif(severity >= -3):
+            num_medium_injuries += 1
+        else:
+            num_severe_injuries += 1
+        
+
     total = num_waiting_room + num_preparation_room + num_waiting_for_operation + num_operating_theater + num_waiting_for_recovery + num_recovery_room + num_recovered 
     total_in_hospital = total - num_recovered
 
@@ -83,6 +100,11 @@ def save_timed_data(save_time):
             "recovered": num_recovered,
             "total_in_hospital": total_in_hospital,
             "total": total
+        },
+        "injuries_distribution": {
+            "light_injuries": num_light_injuries,
+            "medium_injuries": num_medium_injuries,
+            "severe_injuries": num_severe_injuries
         }}
     
 # Save the final data after the simulation is done 
@@ -232,9 +254,11 @@ def patient(env, name, distribution, hospital):
     preparation_time = util.get_random_time(distribution, AVG_PREPARATION_TIME)
     operation_time = util.get_random_time(distribution, AVG_OPERATION_TIME)
     recovery_time = util.get_random_time(distribution, AVG_RECOVERY_TIME)
+    severity = -round(util.get_random_time(util.DISTRIBUTION.EXPONENTIAL, SEVERITY_NUMBER))
     patients_data[name] = { 
     "current_data": {
         "state": state,
+        "severity": severity,
     },
     "process_time": {
         "preparation_time": round(preparation_time, ROUNDING_PRECISION),
@@ -257,7 +281,7 @@ def patient(env, name, distribution, hospital):
         if state == PATIENTSTATE.ARRIVED:
             patients_data[name]["time_stamps"]["arrived"] = round(env.now, ROUNDING_PRECISION)
             save_timed_data(round(env.now, ROUNDING_PRECISION))
-            with hospital.preparation_rooms.request() as request:
+            with hospital.preparation_rooms.request(priority=severity) as request:
                 # Wait for a free Preparation Room
                 yield request
                 state = PATIENTSTATE.IN_PREPARATION
@@ -276,7 +300,7 @@ def patient(env, name, distribution, hospital):
 
         # Patient has been prepared
         elif state == PATIENTSTATE.PREPARED:
-            with hospital.operation_theaters.request() as request:
+            with hospital.operation_theaters.request(priority=severity) as request:
                 # Wait for a free Operation Theater
                 yield request
 
@@ -341,8 +365,8 @@ env.run(until=SIM_TIME)
 save_final_data()
 
 #util.print_timeline(timeline)
-#util.print_patient_results(patients_data)
-#util.print_patient_distribution(saved_data)
+util.print_patient_results(patients_data)
+util.print_patient_distribution(saved_data)
 #util.print_all_waiting_times(saved_data, SIM_TIME)
 util.print_important_results(saved_data, SIM_TIME, patients_handled)
 #util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
