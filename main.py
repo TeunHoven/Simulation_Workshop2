@@ -19,7 +19,7 @@ STARTING_PATIENTS = 0       # Number of patients already in the waiting room
 
 NUM_P_ROOMS = 3           # Number of Preparation Rooms
 NUM_O_THEATERS = 1          # Number of Operating Theaters
-NUM_R_ROOMS = 4            # Number of Recovery Rooms
+NUM_R_ROOMS = 5            # Number of Recovery Rooms
 
 AVG_PREPARATION_TIME = 40   # Average Preparation time (patient in Preparation Room)
 AVG_OPERATION_TIME = 20     # Average Operation time (patient in Operation Theater)
@@ -36,11 +36,13 @@ NUM_OF_RUNS = len(SEEDS)             # The amount of times the simulation is goi
 
 DISTRIBUTION = util.DISTRIBUTION.EXPONENTIAL
 
+is_monitoring = False       # Is the simulation being monitored
+using_twist = False         # Whether the twist is used (Severity)
+
 #
 #   VARIABLES FOR THE MONITORING OF THE MODEL
 #
 
-is_monitoring = False       # Is the simulation being monitored
 patients_data = {}          # Data of each patient
 saved_data = {}             # Data of some time_stamps
 timeline = []               # Timeline of all the events happening in the simulation
@@ -264,8 +266,6 @@ def patient(env, name, distribution, hospital):
     recovery_time = util.get_random_time(distribution, AVG_RECOVERY_TIME)
     severity = -round(util.get_random_time(DISTRIBUTION, SEVERITY_NUMBER))
 
-    is_being_monitored = is_monitoring
-
     timeline.append(f"{env.now:.2f} - A new patient, {name}, enters the waiting room.")
 
 
@@ -292,7 +292,10 @@ def patient(env, name, distribution, hospital):
 
     # Process of the Patient in Hospital
     # Patient has arrived
-    prep_req = hospital.preparation_rooms.request(priority=severity)
+    if using_twist:
+        prep_req = hospital.preparation_rooms.request(priority=severity)
+    else:
+        prep_req = hospital.preparation_rooms.request()
     
     # Patient has arrived
     patients_data[name]["time_stamps"]["arrived"] = round(env.now, ROUNDING_PRECISION)
@@ -316,7 +319,10 @@ def patient(env, name, distribution, hospital):
     patients_data[name]["current_data"]["state"] = state
 
     # Patient has been prepared
-    op_req = hospital.operation_theaters.request(priority=severity)
+    if using_twist:
+        op_req = hospital.operation_theaters.request(priority=severity)
+    else:
+        op_req = hospital.operation_theaters.request()
     # Wait for a free Operation Theater
     yield op_req
     
