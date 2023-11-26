@@ -2,8 +2,8 @@
 # Written by Group 1 (Yu Han, Teun Hoven, Louis Prodhon)
 
 import simpy
-import numpy as np
 from enum import Enum
+import numpy as np
 from Hospital import Hospital
 import util
 
@@ -11,14 +11,15 @@ import util
 #   VARIABLES AND PARAMETERS FOR THE SIMULATION MODEL
 # 
 
+# The 20 seeds for the simulation
+SEEDS = [12345, 23456, 34567, 45678, 56789, 98765, 87654, 76543, 65432, 54321, 13579, 24680, 35791, 46802, 57913, 6824, 79135, 80246, 91357, 1111]
+
 PATIENTSTATE = Enum("PATIENTSTATE", ['ARRIVED', 'IN_PREPARATION', 'PREPARED', 'IN_OPERATION', 'OPERATED', 'IN_RECOVERY', 'RECOVERED'])
-STARTING_PATIENTS = 3       # Number of patients already in the waiting room
+STARTING_PATIENTS = 0       # Number of patients already in the waiting room
 
-NUM_P_ROOMS = 5           # Number of Preparation Rooms
+NUM_P_ROOMS = 3           # Number of Preparation Rooms
 NUM_O_THEATERS = 1          # Number of Operating Theaters
-NUM_R_ROOMS = 5            # Number of Recovery Rooms
-
-NUM_NURSES = 2
+NUM_R_ROOMS = 4            # Number of Recovery Rooms
 
 AVG_PREPARATION_TIME = 40   # Average Preparation time (patient in Preparation Room)
 AVG_OPERATION_TIME = 20     # Average Operation time (patient in Operation Theater)
@@ -28,21 +29,30 @@ ROUNDING_PRECISION = 3      # How many decimal numbers when rounding
 
 SEVERITY_NUMBER = 0.5       # Random number 
 
-SIM_TIME = 1200            # The time for the simulation to run
+SIM_TIME = 1000            # The time for the simulation to run
+WARM_UP_TIME = 1000         # The time for the warm up to finish
+
+NUM_OF_RUNS = len(SEEDS)             # The amount of times the simulation is going to run
+
+DISTRIBUTION = util.DISTRIBUTION.EXPONENTIAL
 
 #
 #   VARIABLES FOR THE MONITORING OF THE MODEL
 #
 
+is_monitoring = False       # Is the simulation being monitored
 patients_data = {}          # Data of each patient
 saved_data = {}             # Data of some time_stamps
 timeline = []               # Timeline of all the events happening in the simulation
 time_in_operating_theater = 0
 patients_handled = 0        # Patients handled in the SIM_TIM
 
+BF_DUMP = []
+OP_DUMP = []
+
 #
 #   UTIL METHODS
-#
+#      
     
 # Monitors and saves data 
 def save_timed_data(save_time):
@@ -109,7 +119,7 @@ def save_timed_data(save_time):
     
 # Save the final data after the simulation is done 
 def save_final_data():
-    save_timed_data(SIM_TIME)
+    save_timed_data(SIM_TIME+WARM_UP_TIME)
 
     # Save final patient distribution
     # Variables for the saving
@@ -221,7 +231,7 @@ def save_final_data():
     saved_data[SIM_TIME]["process_times"] = process_times
 
     # Saves the Utilizations of the rooms (in %)
-    saved_data[SIM_TIME]["utilization"] = {"operating_theater": (time_in_operating_theater/SIM_TIME) * 100}
+    saved_data[SIM_TIME]["utilization_total_sim"] = {"operating_theater": (time_in_operating_theater/(SIM_TIME+WARM_UP_TIME)) * 100}
 
     # Calculate average wait time between arriving and preparation
     avg_arrived_preparation = round(util.get_avg(wait_times_arrived_preparation), ROUNDING_PRECISION)
@@ -246,15 +256,20 @@ def save_final_data():
 def patient(env, name, distribution, hospital):
     global patients_handled
     global time_in_operating_theater
-    timeline.append(f"{env.now:.2f} - A new patient, {name}, enters the waiting room.")
 
     # Initializing Patient
-    in_hospital = True
     state = PATIENTSTATE.ARRIVED
     preparation_time = util.get_random_time(distribution, AVG_PREPARATION_TIME)
     operation_time = util.get_random_time(distribution, AVG_OPERATION_TIME)
     recovery_time = util.get_random_time(distribution, AVG_RECOVERY_TIME)
-    severity = -round(util.get_random_time(util.DISTRIBUTION.EXPONENTIAL, SEVERITY_NUMBER))
+    severity = -round(util.get_random_time(DISTRIBUTION, SEVERITY_NUMBER))
+
+    is_being_monitored = is_monitoring
+
+    timeline.append(f"{env.now:.2f} - A new patient, {name}, enters the waiting room.")
+
+
+    # Create data for the patient
     patients_data[name] = { 
     "current_data": {
         "state": state,
@@ -273,101 +288,135 @@ def patient(env, name, distribution, hospital):
         "operated": -1,
         "starting_recovery": -1,
         "recovered": -1
-        }}
+    }}
 
     # Process of the Patient in Hospital
-    while in_hospital:
-        # Patient has arrived
-        if state == PATIENTSTATE.ARRIVED:
-            patients_data[name]["time_stamps"]["arrived"] = round(env.now, ROUNDING_PRECISION)
-            save_timed_data(round(env.now, ROUNDING_PRECISION))
-            with hospital.preparation_rooms.request(priority=severity) as request:
-                # Wait for a free Preparation Room
-                yield request
-                state = PATIENTSTATE.IN_PREPARATION
-                patients_data[name]["current_data"]["state"] = state
-
-                timeline.append(f"{env.now:.2f} - Patient {name} enter preparation room.")
-                patients_data[name]["time_stamps"]["starting_preparation"] = round(env.now, ROUNDING_PRECISION)
-
-                # Wait for the preparing process
-                yield env.process(hospital.preparing(preparation_time))
-                timeline.append(f"{env.now:.2f} - Patient {name} has been prepared.")
-                patients_data[name]["time_stamps"]["prepared"] = round(env.now, ROUNDING_PRECISION)
-
-                state = PATIENTSTATE.PREPARED
-                patients_data[name]["current_data"]["state"] = state
-
-        # Patient has been prepared
-        elif state == PATIENTSTATE.PREPARED:
-            with hospital.operation_theaters.request(priority=severity) as request:
-                # Wait for a free Operation Theater
-                yield request
-
-                state = PATIENTSTATE.IN_OPERATION
-                patients_data[name]["current_data"]["state"] = state
-
-                timeline.append(f"{env.now:.2f} - Patient {name} enter operation theater.")
-                patients_data[name]["time_stamps"]["starting_operation"] = round(env.now, ROUNDING_PRECISION)
-
-                # Wait for the operating process
-                yield env.process(hospital.operating(operation_time))
-                time_in_operating_theater += operation_time
-                timeline.append(f"{env.now:.2f} - Patient {name} has been operated.")
-                patients_data[name]["time_stamps"]["operated"] = round(env.now, ROUNDING_PRECISION)
-
-                state = PATIENTSTATE.OPERATED
-                patients_data[name]["current_data"]["state"] = state
-
-        # Patient has been operated 
-        elif state == PATIENTSTATE.OPERATED:
-            with hospital.recovery_rooms.request() as request:
-                # Wait for a free Recovery Room
-                yield request
-                state = PATIENTSTATE.IN_RECOVERY
-                patients_data[name]["current_data"]["state"] = state
-
-                timeline.append(f"{env.now:.2f} - Patient {name} enter recovery room.")
-                patients_data[name]["time_stamps"]["starting_recovery"] = round(env.now, ROUNDING_PRECISION)
-
-                # Wait for the recovery process
-                yield env.process(hospital.recovering(recovery_time))
-                timeline.append(f"{env.now:.2f} - Patient {name} has been recovered.")
-                patients_data[name]["time_stamps"]["recovered"] = round(env.now, ROUNDING_PRECISION)
-
-                state = PATIENTSTATE.RECOVERED
-                patients_data[name]["current_data"]["state"] = state
-                
-        # Patient has recovered and is leaving the hospital 
-        elif state == PATIENTSTATE.RECOVERED:
-            timeline.append(f"{env.now:.2f} - Patient {name} has recovered and leaves the hospital!")
-            patients_handled += 1
-            in_hospital = False
+    # Patient has arrived
+    prep_req = hospital.preparation_rooms.request(priority=severity)
     
+    # Patient has arrived
+    patients_data[name]["time_stamps"]["arrived"] = round(env.now, ROUNDING_PRECISION)
     
+    # Wait for a free Preparation Room
+    yield prep_req
+    state = PATIENTSTATE.IN_PREPARATION
+
+    patients_data[name]["current_data"]["state"] = state
+
+    timeline.append(f"{env.now:.2f} - Patient {name} enter preparation room.")
+    patients_data[name]["time_stamps"]["starting_preparation"] = round(env.now, ROUNDING_PRECISION)
+
+    # Wait for the preparing process
+    yield env.process(hospital.preparing(preparation_time))
+    state = PATIENTSTATE.PREPARED
+
+    
+    timeline.append(f"{env.now:.2f} - Patient {name} has been prepared.")
+    patients_data[name]["time_stamps"]["prepared"] = round(env.now, ROUNDING_PRECISION)
+    patients_data[name]["current_data"]["state"] = state
+
+    # Patient has been prepared
+    op_req = hospital.operation_theaters.request(priority=severity)
+    # Wait for a free Operation Theater
+    yield op_req
+    
+    # Release Preparation Room
+    hospital.preparation_rooms.release(prep_req)
+    state = PATIENTSTATE.IN_OPERATION
+
+    patients_data[name]["current_data"]["state"] = state
+    timeline.append(f"{env.now:.2f} - Patient {name} enter operation theater.")
+    patients_data[name]["time_stamps"]["starting_operation"] = round(env.now, ROUNDING_PRECISION)
+
+    # Wait for the operating process
+    yield env.process(hospital.operating(operation_time))
+    state = PATIENTSTATE.OPERATED
+
+    time_in_operating_theater += operation_time
+    timeline.append(f"{env.now:.2f} - Patient {name} has been operated.")
+    patients_data[name]["time_stamps"]["operated"] = round(env.now, ROUNDING_PRECISION)
+    patients_data[name]["current_data"]["state"] = state
+
+    # Patient has been operated 
+    rec_req = hospital.recovery_rooms.request()
+    # Wait for a free Recovery Room
+    yield rec_req
+    state = PATIENTSTATE.IN_RECOVERY
+    
+    # Release Operation Theater
+    hospital.operation_theaters.release(op_req)
+
+    patients_data[name]["current_data"]["state"] = state
+    timeline.append(f"{env.now:.2f} - Patient {name} enter recovery room.")
+    patients_data[name]["time_stamps"]["starting_recovery"] = round(env.now, ROUNDING_PRECISION)
+
+    # Wait for the recovery process
+    yield env.process(hospital.recovering(recovery_time))
+    state = PATIENTSTATE.RECOVERED
+
+    timeline.append(f"{env.now:.2f} - Patient {name} has been recovered.")
+    patients_data[name]["time_stamps"]["recovered"] = round(env.now, ROUNDING_PRECISION)
+    patients_data[name]["current_data"]["state"] = state
+        
+    # Patient has recovered
+    # Release Preparation Room
+    hospital.recovery_rooms.release(rec_req)
+
+    timeline.append(f"{env.now:.2f} - Patient {name} has recovered and leaves the hospital!")
+    patients_handled += 1
+    
+
+def sim_monitor(env, interval):
+    while True:
+        save_timed_data(round(env.now, ROUNDING_PRECISION))
+        yield env.timeout(interval)
+
 # Setup method
-def setup(env):
+def setup(env, SEED):
+    np.random.seed(SEED)
     hospital = Hospital(env, NUM_P_ROOMS, NUM_O_THEATERS, NUM_R_ROOMS, AVG_PREPARATION_TIME, AVG_OPERATION_TIME, AVG_RECOVERY_TIME)
 
-    for i in range(1, STARTING_PATIENTS+1):
-        env.process(patient(env, i, util.DISTRIBUTION.EXPONENTIAL, hospital))
+    #for i in range(1, STARTING_PATIENTS+1):
+    #    env.process(patient(env, i, util.DISTRIBUTION.EXPONENTIAL, hospital))
 
+    i = 0
     while True:
-        yield env.timeout(np.random.exponential(PATIENT_INTERVAL))
+        yield env.timeout(util.get_random_time(DISTRIBUTION, PATIENT_INTERVAL))
         i += 1
-        env.process(patient(env, i, util.DISTRIBUTION.EXPONENTIAL, hospital))
+        env.process(patient(env, i, DISTRIBUTION, hospital))
 
-print("Starting Hospital Simulation... \n")
-env = simpy.Environment()
-env.process(setup(env))
-env.run(until=SIM_TIME)
+monitor = util.Monitor()
 
-save_final_data()
+for i in range(NUM_OF_RUNS):
+    SEED = SEEDS[i]
+    print("Starting Hospital Simulation... \n")
+    env = simpy.Environment()
+    env.process(setup(env, SEED))
+    env.run(until=WARM_UP_TIME)
+    
+    is_monitoring = True
 
-#util.print_timeline(timeline)
-util.print_patient_results(patients_data)
-util.print_patient_distribution(saved_data)
-#util.print_all_waiting_times(saved_data, SIM_TIME)
-util.print_important_results(saved_data, SIM_TIME, patients_handled)
-#util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
+    env.process(sim_monitor(env, 10))
+    env.run(until=env.now+SIM_TIME)
 
+    save_final_data()
+
+    #util.print_timeline(timeline)
+    #util.print_patient_results(patients_data)
+    #util.print_patient_distribution(saved_data)
+    #util.print_all_waiting_times(saved_data, SIM_TIME)
+    util.print_important_results(saved_data, SIM_TIME, patients_handled)
+    #util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
+    
+    monitor.save_data_file(i, NUM_P_ROOMS, NUM_R_ROOMS, SEED, DISTRIBUTION, saved_data)
+    monitor.save(saved_data)
+
+    # Resetting data
+    is_monitoring = False       
+    patients_data = {}          
+    saved_data = {}             
+    timeline = []               
+    time_in_operating_theater = 0
+    patients_handled = 0  
+
+monitor.save_final_data_file(NUM_P_ROOMS, NUM_R_ROOMS, DISTRIBUTION)

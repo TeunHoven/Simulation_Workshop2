@@ -1,5 +1,6 @@
 from enum import Enum
 import numpy as np
+import csv
 
 DISTRIBUTION = Enum("DISTRIBUTION", ['NORMAL', 'EXPONENTIAL'])
 
@@ -82,7 +83,7 @@ def print_important_results(saved_data, SIM_TIME, patients_handled):
     print()
 
     print("The utilization of the rooms are:")
-    print(f"\tOperating Theater:                {saved_data[SIM_TIME]['utilization']['operating_theater']:.2f}%")
+    print(f"\tOperating Theater:                {saved_data[SIM_TIME]['utilization_total_sim']['operating_theater']:.2f}%")
 
 # Print the distribution of people in the hospital per timestamp
 def print_patient_distribution(saved_data):
@@ -121,3 +122,68 @@ def print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, tim
 
     print_important_results(saved_data, SIM_TIME, patients_handled)       # Print all the important results (averages, etc.)
 
+class Monitor():
+    def __init__(self):
+        self.op_theater_is_blocking = 0
+        self.op_theater_is_operational = 0
+        self.BF_DUMP = []
+        self.OP_DUMP = []
+
+    def save(self, saved_data):
+        for time in saved_data:
+            result = []
+            result.append(f"{time:.2f}")
+            result.append(saved_data[time]["patient_distribution"]["waiting_for_operation"])
+
+            if(saved_data[time]["patient_distribution"]["waiting_for_recovery"] > 0 & saved_data[time]["patient_distribution"]["operation_theater"] == 0):
+                self.op_theater_is_blocking += 1
+                result.append("False")
+            elif(saved_data[time]["patient_distribution"]["operation_theater"] > 0):
+                self.op_theater_is_operational += 1
+                result.append("True")
+            else:
+                result.append("False")
+        
+        self.BF_DUMP.append(self.op_theater_is_blocking)
+        self.OP_DUMP.append(self.op_theater_is_operational)
+        
+    def save_final_data_file(self, num_p_rooms, num_r_rooms, distribution):
+        file = open(f"Simulations/TOTAL-RUN-{num_p_rooms}PrepRooms_{num_r_rooms}RecRooms.csv", "w+", encoding='UTF8', newline='')
+        
+        file.write(f"Mean blocking: {np.mean(self.BF_DUMP)}\n")
+        file.write(f"Mean operational: {np.mean(self.OP_DUMP)}\n")
+        file.write(f"st. dev. blocking: {np.std(self.BF_DUMP)}\n")
+        file.write(f"st. dev. operational: {np.std(self.OP_DUMP)}\n")
+
+        file.close()
+
+    def save_data_file(self, sim_num, num_p_rooms, num_r_rooms, seed, distribution, saved_data):
+        op_theater_is_blocking = 0
+        op_theater_is_operational = 0
+
+        header = ["time", "Queue Operation Theater", "Operational"]
+
+        file = open(f"Simulations/{num_p_rooms}PrepRooms_{num_r_rooms}RecRooms_Sim-{sim_num}_{distribution}_{seed}.csv", "w+", encoding='UTF8', newline='')
+
+        writer = csv.writer(file)
+        writer.writerow(header)
+
+        for time in saved_data:
+            result = []
+            result.append(f"{time:.2f}")
+            result.append(saved_data[time]["patient_distribution"]["waiting_for_operation"])
+
+            if(saved_data[time]["patient_distribution"]["waiting_for_recovery"] > 0 & saved_data[time]["patient_distribution"]["operation_theater"] == 0):
+                op_theater_is_blocking += 1
+                result.append("False")
+            elif(saved_data[time]["patient_distribution"]["operation_theater"] > 0):
+                op_theater_is_operational += 1
+                result.append("True")
+            else:
+                result.append("False")
+
+            writer.writerow(result)
+
+        file.close()
+    
+        print(f"Blocking: {op_theater_is_blocking} || Operational: {op_theater_is_operational}")
