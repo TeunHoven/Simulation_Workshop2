@@ -17,9 +17,12 @@ SEEDS = [12345, 23456, 34567, 45678, 56789, 98765, 87654, 76543, 65432, 54321, 1
 PATIENTSTATE = Enum("PATIENTSTATE", ['ARRIVED', 'IN_PREPARATION', 'PREPARED', 'IN_OPERATION', 'OPERATED', 'IN_RECOVERY', 'RECOVERED'])
 STARTING_PATIENTS = 0       # Number of patients already in the waiting room
 
-NUM_P_ROOMS = 3           # Number of Preparation Rooms
+NUM_P_ROOMS = 4           # Number of Preparation Rooms
 NUM_O_THEATERS = 1          # Number of Operating Theaters
 NUM_R_ROOMS = 5            # Number of Recovery Rooms
+
+NUM_NURSES = 4             # Number of nurses
+TIME_BETWEEN_ROOMS = 2      # Time between the rooms
 
 AVG_PREPARATION_TIME = 40   # Average Preparation time (patient in Preparation Room)
 AVG_OPERATION_TIME = 20     # Average Operation time (patient in Operation Theater)
@@ -30,14 +33,14 @@ ROUNDING_PRECISION = 3      # How many decimal numbers when rounding
 SEVERITY_NUMBER = 0.5       # Random number 
 
 SIM_TIME = 1000            # The time for the simulation to run
-WARM_UP_TIME = 1000         # The time for the warm up to finish
+WARM_UP_TIME = 2000         # The time for the warm up to finish
 
 NUM_OF_RUNS = len(SEEDS)             # The amount of times the simulation is going to run
 
 DISTRIBUTION = util.DISTRIBUTION.EXPONENTIAL
 
 is_monitoring = False       # Is the simulation being monitored
-using_twist = False         # Whether the twist is used (Severity)
+using_twist = True         # Whether the twist is used (Severity)
 
 #
 #   VARIABLES FOR THE MONITORING OF THE MODEL
@@ -101,6 +104,11 @@ def save_timed_data(save_time):
     total = num_waiting_room + num_preparation_room + num_waiting_for_operation + num_operating_theater + num_waiting_for_recovery + num_recovery_room + num_recovered 
     total_in_hospital = total - num_recovered
 
+    if (save_time - WARM_UP_TIME) == 0:
+        utilization = 0
+    else:
+        utilization = (time_in_operating_theater/(save_time-WARM_UP_TIME)) * 100
+
     saved_data[save_time] = {
         "patient_distribution": {
             "waiting_room": num_waiting_room,
@@ -117,7 +125,8 @@ def save_timed_data(save_time):
             "light_injuries": num_light_injuries,
             "medium_injuries": num_medium_injuries,
             "severe_injuries": num_severe_injuries
-        }}
+        },
+        "utilization": {"operating_theater": utilization}}
     
 # Save the final data after the simulation is done 
 def save_final_data():
@@ -152,7 +161,7 @@ def save_final_data():
     avg_patients_waiting_recovery = util.get_avg(all_num_patients_in_waiting_recovery)
 
     # Save the final distribution in the dictionary
-    saved_data[SIM_TIME]["patient_distribution"]["averages"] = {
+    saved_data[WARM_UP_TIME+SIM_TIME]["patient_distribution"]["averages"] = {
         "max_patients_waiting_preparation": max_patients_waiting_preparation,
         "avg_patients_waiting_preparation": avg_patients_waiting_preparation,
         "max_patients_waiting_operation": max_patients_waiting_operation,
@@ -230,10 +239,10 @@ def save_final_data():
         }
     }
 
-    saved_data[SIM_TIME]["process_times"] = process_times
+    saved_data[WARM_UP_TIME+SIM_TIME]["process_times"] = process_times
 
     # Saves the Utilizations of the rooms (in %)
-    saved_data[SIM_TIME]["utilization_total_sim"] = {"operating_theater": (time_in_operating_theater/(SIM_TIME+WARM_UP_TIME)) * 100}
+    saved_data[WARM_UP_TIME+SIM_TIME]["utilization_total_sim"] = {"operating_theater": (time_in_operating_theater/(SIM_TIME)) * 100}
 
     # Calculate average wait time between arriving and preparation
     avg_arrived_preparation = round(util.get_avg(wait_times_arrived_preparation), ROUNDING_PRECISION)
@@ -244,8 +253,8 @@ def save_final_data():
     # Calculate average wait time between being operated and recovery
     avg_operation_recovery = round(util.get_avg(wait_times_operation_recovery), ROUNDING_PRECISION)
 
-    saved_data[SIM_TIME]["waiting_times"] = waiting_times
-    saved_data[SIM_TIME]["waiting_times"]["averages"] = {
+    saved_data[WARM_UP_TIME+SIM_TIME]["waiting_times"] = waiting_times
+    saved_data[WARM_UP_TIME+SIM_TIME]["waiting_times"]["averages"] = {
         "arrived_preparation": avg_arrived_preparation,
         "preparation_operation": avg_preparation_operation,
         "operation_recovery": avg_operation_recovery,
@@ -380,7 +389,7 @@ def sim_monitor(env, interval):
 # Setup method
 def setup(env, SEED):
     np.random.seed(SEED)
-    hospital = Hospital(env, NUM_P_ROOMS, NUM_O_THEATERS, NUM_R_ROOMS, AVG_PREPARATION_TIME, AVG_OPERATION_TIME, AVG_RECOVERY_TIME)
+    hospital = Hospital(env, NUM_P_ROOMS, NUM_O_THEATERS, NUM_R_ROOMS, NUM_NURSES, using_twist, TIME_BETWEEN_ROOMS)
 
     #for i in range(1, STARTING_PATIENTS+1):
     #    env.process(patient(env, i, util.DISTRIBUTION.EXPONENTIAL, hospital))
@@ -401,6 +410,7 @@ for i in range(NUM_OF_RUNS):
     env.run(until=WARM_UP_TIME)
     
     is_monitoring = True
+    time_in_operating_theater = 0
 
     env.process(sim_monitor(env, 10))
     env.run(until=env.now+SIM_TIME)
@@ -411,11 +421,11 @@ for i in range(NUM_OF_RUNS):
     #util.print_patient_results(patients_data)
     #util.print_patient_distribution(saved_data)
     #util.print_all_waiting_times(saved_data, SIM_TIME)
-    util.print_important_results(saved_data, SIM_TIME, patients_handled)
+    util.print_important_results(saved_data, WARM_UP_TIME+SIM_TIME, patients_handled)
     #util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
     
     monitor.save_data_file(i, NUM_P_ROOMS, NUM_R_ROOMS, SEED, DISTRIBUTION, saved_data)
-    monitor.save(saved_data)
+    monitor.save(saved_data, WARM_UP_TIME+SIM_TIME, NUM_R_ROOMS)
 
     # Resetting data
     is_monitoring = False       

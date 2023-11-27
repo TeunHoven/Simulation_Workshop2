@@ -126,10 +126,13 @@ class Monitor():
     def __init__(self):
         self.op_theater_is_blocking = 0
         self.op_theater_is_operational = 0
+        self.recovery_room_full = 0
+        self.UTIL_DUMP = []
         self.BF_DUMP = []
         self.OP_DUMP = []
+        self.REC_ROOM_DUMP = []
 
-    def save(self, saved_data):
+    def save(self, saved_data, sim_time, num_r_rooms):
         for time in saved_data:
             result = []
             result.append(f"{time:.2f}")
@@ -143,17 +146,29 @@ class Monitor():
                 result.append("True")
             else:
                 result.append("False")
+
+            if(saved_data[time]["patient_distribution"]["recovery_room"] == num_r_rooms):
+                self.recovery_room_full += 1 
         
+        self.UTIL_DUMP.append(saved_data[sim_time]["utilization_total_sim"]["operating_theater"])
         self.BF_DUMP.append(self.op_theater_is_blocking)
         self.OP_DUMP.append(self.op_theater_is_operational)
+        self.REC_ROOM_DUMP.append(self.recovery_room_full)
         
     def save_final_data_file(self, num_p_rooms, num_r_rooms, distribution):
         file = open(f"Simulations/TOTAL-RUN-{num_p_rooms}PrepRooms_{num_r_rooms}RecRooms.csv", "w+", encoding='UTF8', newline='')
         
         file.write(f"Mean blocking: {np.mean(self.BF_DUMP)}\n")
+        file.write(f"st. dev. blocking: {np.std(self.BF_DUMP)}\n\n")
+
         file.write(f"Mean operational: {np.mean(self.OP_DUMP)}\n")
-        file.write(f"st. dev. blocking: {np.std(self.BF_DUMP)}\n")
-        file.write(f"st. dev. operational: {np.std(self.OP_DUMP)}\n")
+        file.write(f"st. dev. operational: {np.std(self.OP_DUMP)}\n\n")
+
+        file.write(f"Mean full recovery room: {np.mean(self.REC_ROOM_DUMP)}\n")
+        file.write(f"st. dev. operational: {np.std(self.REC_ROOM_DUMP)}\n\n")
+
+        file.write(f"Mean utilization operation theater: {np.mean(self.UTIL_DUMP):.2f}%\n")
+        file.write(f"st dev. operation theater: {np.std(self.UTIL_DUMP):.2f}%")
 
         file.close()
 
@@ -161,7 +176,7 @@ class Monitor():
         op_theater_is_blocking = 0
         op_theater_is_operational = 0
 
-        header = ["time", "Queue Operation Theater", "Operational"]
+        header = ["time", "Queue Operation Theater", "Operational", "Recovery Room Full", "utilization_rate"]
 
         file = open(f"Simulations/{num_p_rooms}PrepRooms_{num_r_rooms}RecRooms_Sim-{sim_num}_{distribution}_{seed}.csv", "w+", encoding='UTF8', newline='')
 
@@ -181,6 +196,13 @@ class Monitor():
                 result.append("True")
             else:
                 result.append("False")
+
+            if(saved_data[time]["patient_distribution"]["recovery_room"] == num_r_rooms):
+                result.append("True")
+            else:
+                result.append("False")
+
+            result.append(saved_data[time]["utilization"]["operating_theater"])
 
             writer.writerow(result)
 
