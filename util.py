@@ -154,6 +154,10 @@ class Monitor():
         self.BF_DUMP.append(self.op_theater_is_blocking)
         self.OP_DUMP.append(self.op_theater_is_operational)
         self.REC_ROOM_DUMP.append(self.recovery_room_full)
+
+        self.op_theater_is_blocking = 0
+        self.op_theater_is_operational = 0
+        self.recovery_room_full = 0
         
     def save_final_data_file(self, num_p_rooms, num_r_rooms, distribution):
         file = open(f"Simulations/TOTAL-RUN-{num_p_rooms}PrepRooms_{num_r_rooms}RecRooms.csv", "w+", encoding='UTF8', newline='')

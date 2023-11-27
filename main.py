@@ -14,33 +14,34 @@ import util
 # The 20 seeds for the simulation
 SEEDS = [12345, 23456, 34567, 45678, 56789, 98765, 87654, 76543, 65432, 54321, 13579, 24680, 35791, 46802, 57913, 6824, 79135, 80246, 91357, 1111]
 
+# All patient states
 PATIENTSTATE = Enum("PATIENTSTATE", ['ARRIVED', 'IN_PREPARATION', 'PREPARED', 'IN_OPERATION', 'OPERATED', 'IN_RECOVERY', 'RECOVERED'])
-STARTING_PATIENTS = 0       # Number of patients already in the waiting room
+STARTING_PATIENTS = 0                               # Number of patients already in the waiting room
 
-NUM_P_ROOMS = 4           # Number of Preparation Rooms
-NUM_O_THEATERS = 1          # Number of Operating Theaters
-NUM_R_ROOMS = 5            # Number of Recovery Rooms
+NUM_P_ROOMS = 4                                     # Number of Preparation Rooms
+NUM_O_THEATERS = 1                                  # Number of Operating Theaters
+NUM_R_ROOMS = 5                                     # Number of Recovery Rooms
 
-NUM_NURSES = 4             # Number of nurses
-TIME_BETWEEN_ROOMS = 2      # Time between the rooms
+NUM_NURSES = 4                                      # Number of nurses
+TIME_BETWEEN_ROOMS = 2                              # Time between the rooms
 
-AVG_PREPARATION_TIME = 40   # Average Preparation time (patient in Preparation Room)
-AVG_OPERATION_TIME = 20     # Average Operation time (patient in Operation Theater)
-AVG_RECOVERY_TIME = 40      # Average Recovery time (patient in Recovery Room)
-PATIENT_INTERVAL = 25       # Average time it takes for a new patient to arrive
-ROUNDING_PRECISION = 3      # How many decimal numbers when rounding
+AVG_PREPARATION_TIME = 40                           # Average Preparation time (patient in Preparation Room)
+AVG_OPERATION_TIME = 20                             # Average Operation time (patient in Operation Theater)
+AVG_RECOVERY_TIME = 40                              # Average Recovery time (patient in Recovery Room)
+PATIENT_INTERVAL = 25                               # Average time it takes for a new patient to arrive
+ROUNDING_PRECISION = 3                              # How many decimal numbers when rounding
 
-SEVERITY_NUMBER = 0.5       # Random number 
+SEVERITY_NUMBER = 0.5                               # Random number 
 
-SIM_TIME = 1000            # The time for the simulation to run
-WARM_UP_TIME = 2000         # The time for the warm up to finish
+SIM_TIME = 1000                                     # The time for the simulation to run
+WARM_UP_TIME = 2000                                 # The time for the warm up to finish
 
-NUM_OF_RUNS = len(SEEDS)             # The amount of times the simulation is going to run
+NUM_OF_RUNS = len(SEEDS)                            # The amount of times the simulation is going to run
 
-DISTRIBUTION = util.DISTRIBUTION.EXPONENTIAL
+DISTRIBUTION = util.DISTRIBUTION.EXPONENTIAL        # The distribution used in the simulation
 
-is_monitoring = False       # Is the simulation being monitored
-using_twist = True         # Whether the twist is used (Severity)
+is_monitoring = False                               # Is the simulation being monitored
+using_twist = False                                 # Whether the twist is used (Severity)
 
 #
 #   VARIABLES FOR THE MONITORING OF THE MODEL
