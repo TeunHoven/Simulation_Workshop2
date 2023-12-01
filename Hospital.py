@@ -9,7 +9,8 @@ class Hospital:
         self.preparation_rooms = simpy.PriorityResource(env, num_p_rooms)
         self.operation_theaters = simpy.PriorityResource(env, num_o_theaters)
         self.recovery_rooms = simpy.Resource(env, num_r_rooms)
-        self.nurses = simpy.Resource(env, num_nurses)
+        if using_twist:
+            self.nurses = simpy.Resource(env, num_nurses)
         self.using_twist = using_twist
         self.time_between_rooms = time_between_rooms
 

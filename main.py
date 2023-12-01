@@ -12,7 +12,10 @@ import util
 # 
 
 # The 20 seeds for the simulation
-SEEDS = [12345, 23456, 34567, 45678, 56789, 98765, 87654, 76543, 65432, 54321, 13579, 24680, 35791, 46802, 57913, 6824, 79135, 80246, 91357, 1111]
+SEEDS = [12345] #, 23456, 34567, 45678, 56789, 98765, 87654, 76543, 65432, 54321, 13579, 24680, 35791, 46802, 57913, 6824, 79135, 80246, 91357, 1111]
+
+# The types of configurations ([NUM_P_ROOMS, NUM_R_ROOMS, DISTRIBUTION, AVG_PREP_TIME, STD_PREP_TIME (if applicable), AVG_REC_TIME, STD_REC_TIME (if applicable), PATIENT_INTERVAL, STD_PATIENT_INTERVAL (if applicable), USING_TWIST, NUM_NURSES (if applicable)])
+configurations = [[4, 5, util.DISTRIBUTION.EXPONENTIAL, 40, 0, 40, 0, 25, 0, False, 0], [3, 5, util.DISTRIBUTION.EXPONENTIAL, 40, 0, 40, 0, 25, 0, False, 0]]
 
 # All patient states
 PATIENTSTATE = Enum("PATIENTSTATE", ['ARRIVED', 'IN_PREPARATION', 'PREPARED', 'IN_OPERATION', 'OPERATED', 'IN_RECOVERY', 'RECOVERED'])
@@ -26,17 +29,19 @@ NUM_NURSES = 4                                      # Number of nurses
 TIME_BETWEEN_ROOMS = 2                              # Time between the rooms
 
 AVG_PREPARATION_TIME = 40                           # Average Preparation time (patient in Preparation Room)
+STD_PREPARATION_TIME = 0                            # Standard Deviation of Preparation time
 AVG_OPERATION_TIME = 20                             # Average Operation time (patient in Operation Theater)
 AVG_RECOVERY_TIME = 40                              # Average Recovery time (patient in Recovery Room)
+STD_RECOVERY_TIME = 0                               # Standard Deviation of Recovery time
 PATIENT_INTERVAL = 25                               # Average time it takes for a new patient to arrive
+STD_PATIENT_INTERVAL = 0                            # Standard Deviation of Patient Interval time
 ROUNDING_PRECISION = 3                              # How many decimal numbers when rounding
 
 SEVERITY_NUMBER = 0.5                               # Random number 
 
 SIM_TIME = 1000                                     # The time for the simulation to run
-WARM_UP_TIME = 2000                                 # The time for the warm up to finish
-
-NUM_OF_RUNS = len(SEEDS)                            # The amount of times the simulation is going to run
+WARM_UP_TIME = 50000                                 # The time for the warm up to finish
+NUM_RUNS = 10                                       # The amount of times the simulation is going to run
 
 DISTRIBUTION = util.DISTRIBUTION.EXPONENTIAL        # The distribution used in the simulation
 
@@ -61,7 +66,7 @@ OP_DUMP = []
 #      
     
 # Monitors and saves data 
-def save_timed_data(save_time):
+def save_timed_data(save_time, run):
     num_waiting_room = 0
     num_preparation_room = 0
     num_waiting_for_operation = 0
@@ -105,10 +110,12 @@ def save_timed_data(save_time):
     total = num_waiting_room + num_preparation_room + num_waiting_for_operation + num_operating_theater + num_waiting_for_recovery + num_recovery_room + num_recovered 
     total_in_hospital = total - num_recovered
 
-    if (save_time - WARM_UP_TIME) == 0:
+    run_time = (run*WARM_UP_TIME) + (run*SIM_TIME)
+
+    if (save_time - run_time) or (run_time == 0) == 0:
         utilization = 0
     else:
-        utilization = (time_in_operating_theater/(save_time-WARM_UP_TIME)) * 100
+        utilization = (time_in_operating_theater/run_time) * 100
 
     saved_data[save_time] = {
         "patient_distribution": {
@@ -130,8 +137,8 @@ def save_timed_data(save_time):
         "utilization": {"operating_theater": utilization}}
     
 # Save the final data after the simulation is done 
-def save_final_data():
-    save_timed_data(SIM_TIME+WARM_UP_TIME)
+def save_final_data(run):
+    save_timed_data(SIM_TIME+WARM_UP_TIME, run)
 
     # Save final patient distribution
     # Variables for the saving
@@ -278,7 +285,6 @@ def patient(env, name, distribution, hospital):
 
     timeline.append(f"{env.now:.2f} - A new patient, {name}, enters the waiting room.")
 
-
     # Create data for the patient
     patients_data[name] = { 
     "current_data": {
@@ -380,11 +386,13 @@ def patient(env, name, distribution, hospital):
 
     timeline.append(f"{env.now:.2f} - Patient {name} has recovered and leaves the hospital!")
     patients_handled += 1
+    yield env.timeout(150)
+    del patients_data[name]
     
 
-def sim_monitor(env, interval):
-    while True:
-        save_timed_data(round(env.now, ROUNDING_PRECISION))
+def sim_monitor(env, interval, run):
+    while is_monitoring:
+        save_timed_data(round(env.now, ROUNDING_PRECISION), run)
         yield env.timeout(interval)
 
 # Setup method
@@ -402,38 +410,56 @@ def setup(env, SEED):
         env.process(patient(env, i, DISTRIBUTION, hospital))
 
 monitor = util.Monitor()
+for c in range(len(configurations)):
+    config = configurations[c]
 
-for i in range(NUM_OF_RUNS):
-    SEED = SEEDS[i]
-    print("Starting Hospital Simulation... \n")
-    env = simpy.Environment()
-    env.process(setup(env, SEED))
-    env.run(until=WARM_UP_TIME)
-    
-    is_monitoring = True
-    time_in_operating_theater = 0
+    NUM_P_ROOMS = config[0]
+    NUM_R_ROOMS = config[1]
+    DISTRIBUTION = config[2]
+    AVG_PREPARATION_TIME = config[3]
+    STD_PREPARATION_TIME = config[4]
+    AVG_RECOVERY_TIME = config[5]
+    STD_RECOVERY_TIME = config[6]
+    PATIENT_INTERVAL = config[7]
+    STD_PATIENT_INTERVAL = config[8]
+    using_twist = config[9]
+    NUM_NURSES = config[10]
 
-    env.process(sim_monitor(env, 10))
-    env.run(until=env.now+SIM_TIME)
 
-    save_final_data()
+    for i in range(len(SEEDS)):
+        SEED = SEEDS[i]
+        print("Starting Hospital Simulation... \n")
+        env = simpy.Environment()
+        env.process(setup(env, SEED))
+        for r in range(NUM_RUNS):
+            env.run(until=env.now+WARM_UP_TIME)
+            
+            is_monitoring = True
+            time_in_operating_theater = 0
 
-    #util.print_timeline(timeline)
-    #util.print_patient_results(patients_data)
-    #util.print_patient_distribution(saved_data)
-    #util.print_all_waiting_times(saved_data, SIM_TIME)
-    util.print_important_results(saved_data, WARM_UP_TIME+SIM_TIME, patients_handled)
-    #util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
-    
-    monitor.save_data_file(i, NUM_P_ROOMS, NUM_R_ROOMS, SEED, DISTRIBUTION, saved_data)
-    monitor.save(saved_data, WARM_UP_TIME+SIM_TIME, NUM_R_ROOMS)
+            env.process(sim_monitor(env, 10, r))
+            env.run(until=env.now+SIM_TIME)
 
-    # Resetting data
-    is_monitoring = False       
-    patients_data = {}          
-    saved_data = {}             
-    timeline = []               
-    time_in_operating_theater = 0
-    patients_handled = 0  
+            save_final_data(r)
 
-monitor.save_final_data_file(NUM_P_ROOMS, NUM_R_ROOMS, DISTRIBUTION)
+            #util.print_timeline(timeline)
+            #util.print_patient_results(patients_data)
+            #util.print_patient_distribution(saved_data)
+            #util.print_all_waiting_times(saved_data, SIM_TIME)
+            util.print_important_results(saved_data, WARM_UP_TIME+SIM_TIME, patients_handled)
+            #util.print_all_results(saved_data, SIM_TIME, patients_data, patients_handled, timeline)
+            
+            monitor.save_data_file(i, NUM_P_ROOMS, NUM_R_ROOMS, SEED, DISTRIBUTION, saved_data)
+            monitor.save(saved_data, WARM_UP_TIME+SIM_TIME, NUM_R_ROOMS)
+
+            # Resetting data
+            is_monitoring = False       
+                           
+            time_in_operating_theater = 0 
+
+        patients_data = {}          
+        saved_data = {}             
+        timeline = []
+        patients_handled = 0 
+        
+        monitor.save_final_data_file(config[0], config[1], config[3])
