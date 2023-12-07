@@ -1,8 +1,9 @@
 from enum import Enum
 import numpy as np
 import csv
+import os
 
-DISTRIBUTION = Enum("DISTRIBUTION", ['NORMAL', 'EXPONENTIAL'])
+DISTRIBUTION = Enum("DISTRIBUTION", ['NORMAL', 'EXPONENTIAL', 'UNIFORM'])
 
 # Get a random time according to a distribution
 def get_random_time(distribution, avg_time, std_dev=1):
@@ -10,6 +11,8 @@ def get_random_time(distribution, avg_time, std_dev=1):
         return np.random.normal(avg_time, std_dev)
     elif(distribution == DISTRIBUTION.EXPONENTIAL):
         return np.random.exponential(avg_time)
+    elif(distribution == DISTRIBUTION.UNIFORM):
+        return np.random.uniform(avg_time, std_dev)
 
 # Get the average of the data given
 def get_avg(data):
@@ -131,6 +134,12 @@ class Monitor():
         self.BF_DUMP = []
         self.OP_DUMP = []
         self.REC_ROOM_DUMP = []
+        self.arrival_queues = []
+        self.first = True
+
+    def reset(self):
+        self.arrival_queues = []
+        self.first = True
 
     def save(self, saved_data, sim_time, num_r_rooms):
         for time in saved_data:
@@ -159,7 +168,7 @@ class Monitor():
         self.op_theater_is_operational = 0
         self.recovery_room_full = 0
         
-    def save_final_data_file(self, num_p_rooms, num_r_rooms, distribution):
+    def save_final_data_file_assignment3(self, num_p_rooms, num_r_rooms, distribution):
         file = open(f"Simulations/TOTAL-RUN-{num_p_rooms}PrepRooms_{num_r_rooms}RecRooms.csv", "w+", encoding='UTF8', newline='')
         
         file.write(f"Mean blocking: {np.mean(self.BF_DUMP)}\n")
@@ -176,7 +185,7 @@ class Monitor():
 
         file.close()
 
-    def save_data_file(self, sim_num, num_p_rooms, num_r_rooms, seed, distribution, saved_data):
+    def save_data_file_assignment_3(self, sim_num, num_p_rooms, num_r_rooms, seed, distribution, saved_data):
         op_theater_is_blocking = 0
         op_theater_is_operational = 0
 
@@ -213,3 +222,52 @@ class Monitor():
         file.close()
     
         print(f"Blocking: {op_theater_is_blocking} || Operational: {op_theater_is_operational}")
+
+    def save_final_data_file_assignment4(self, config):
+        path = f"Data/{config[0]},{config[1]},{config[2]}({config[3]}_{config[4]}),{config[5]}({config[6]}_{config[7]}),{config[8]}({config[9]}_{config[10]}),({config[11]}_{config[12]})"
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        file = open(f"{path}/data.csv", "a+", encoding='UTF8', newline='')
+
+        writer = csv.writer(file)
+
+        result = ["Average", np.mean(self.arrival_queues), np.std(self.arrival_queues)]
+
+        writer.writerow(result)
+    
+    def save_data_file_assignment4(self, config, saved_data):
+        path = f"Data/{config[0]},{config[1]},{config[2]}({config[3]}_{config[4]}),{config[5]}({config[6]}_{config[7]}),{config[8]}({config[9]}_{config[10]}),({config[11]}_{config[12]})"
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        if self.first:
+            file = open(f"{path}/data.csv", "w+", encoding='UTF8', newline='')
+        else:
+            file = open(f"{path}/data.csv", "a+", encoding='UTF8', newline='') 
+
+
+        writer = csv.writer(file)
+        
+        if self.first:
+            header = ["count", "avg queue length", "std dev queue"]
+            writer.writerow(header)
+            self.first = False
+
+        arrival_queue = []
+        count = 0
+
+        for time in saved_data:
+            arrival_queue.append(saved_data[time]["patient_distribution"]["waiting_room"])
+            count += 1
+
+        mean = np.mean(arrival_queue)
+        std = np.std(arrival_queue)
+
+        result = [count, mean, std]
+
+        self.arrival_queues.append(mean)
+
+        writer.writerow(result)
